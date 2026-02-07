@@ -130,14 +130,6 @@ def get_team_picks_in_round(team, round_num):
             if tm == team:
                 picks.append(overall_pick)
     return picks
-    else:
-        # Standard rounds
-        start_pick = (round_num - 1) * 30 + 1
-        for i in range(30):
-            pick_num = start_pick + i
-            if get_team_at_pick(pick_num, round_num) == team:
-                picks.append(pick_num)
-    return picks
 
 # Team Draft Tendencies (Applied contextually based on round and situation)
 TEAM_TENDENCIES = {
