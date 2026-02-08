@@ -478,6 +478,26 @@ def cpu_draft_pick(available_prospects, team, pick_num):
     if not available_prospects:
         return None
     
+    # SIGNABILITY: Increase bonuses for prospects who fall
+    # If a top-50 guy is still available at pick 100+, there's a reason (hard to sign)
+    for prospect in available_prospects:
+        rank = prospect['rank']
+        expected_pick = rank  # Roughly where they should go
+        fall_amount = pick_num - expected_pick
+        
+        # If they've fallen significantly, increase their bonus demand
+        if fall_amount > 50 and rank <= 100:
+            # Top 100 guy falling 50+ spots = signability concern
+            # Increase their adjusted slot by 30-50%
+            if 'original_adjusted_slot' not in prospect:
+                prospect['original_adjusted_slot'] = prospect.get('adjusted_slot', 0)
+            prospect['adjusted_slot'] = int(prospect['original_adjusted_slot'] * random.uniform(1.3, 1.5))
+        elif fall_amount > 30 and rank <= 50:
+            # Top 50 guy falling 30+ spots
+            if 'original_adjusted_slot' not in prospect:
+                prospect['original_adjusted_slot'] = prospect.get('adjusted_slot', 0)
+            prospect['adjusted_slot'] = int(prospect['original_adjusted_slot'] * random.uniform(1.2, 1.4))
+    
     # CHAOS PICK: Small chance of a team reaching for someone
     # Happens ~5-10% of the time in early rounds
     chaos_chance = 0
@@ -491,8 +511,7 @@ def cpu_draft_pick(available_prospects, team, pick_num):
     is_chaos_pick = random.random() < chaos_chance
     
     # REAL DRAFT VARIANCE MODEL
-    # Based on analysis: Top prospects stay very close to their rank
-    # But occasional chaos (like Tyler Bremner #25 → #2 in 2025)
+    # CPU is MORE AGGRESSIVE at taking best available
     
     if is_chaos_pick:
         # CHAOS: Reach 15-30 spots beyond normal range
@@ -508,31 +527,27 @@ def cpu_draft_pick(available_prospects, team, pick_num):
         else:
             candidates = [p for p in available_prospects if p['rank'] <= 250]
     else:
-        # NORMAL PICKS - stay close to rank
+        # NORMAL PICKS - CPU MORE AGGRESSIVE (wider ranges)
         if pick_num <= 5:
-            # Top 5 picks: Must be from top 10 prospects
-            # In 2024: picks 1-5 were ranks 1, 4, 2, 5, 7
-            candidates = [p for p in available_prospects if p['rank'] <= 10]
+            candidates = [p for p in available_prospects if p['rank'] <= 12]  # Was 10
         elif pick_num <= 10:
-            # Picks 6-10: From top 20
-            candidates = [p for p in available_prospects if p['rank'] <= 20]
+            candidates = [p for p in available_prospects if p['rank'] <= 25]  # Was 20
         elif pick_num <= 15:
-            # Picks 11-15: From top 30
-            candidates = [p for p in available_prospects if p['rank'] <= 30]
+            candidates = [p for p in available_prospects if p['rank'] <= 35]  # Was 30
         elif pick_num <= 20:
-            # Picks 16-20: From top 50
-            candidates = [p for p in available_prospects if p['rank'] <= 50]
+            candidates = [p for p in available_prospects if p['rank'] <= 55]  # Was 50
         elif pick_num <= 30:
-            # Picks 21-30: From top 70
-            candidates = [p for p in available_prospects if p['rank'] <= 70]
+            candidates = [p for p in available_prospects if p['rank'] <= 80]  # Was 70
         elif pick_num <= 40:
-            # Rest of round 1: From top 100
-            candidates = [p for p in available_prospects if p['rank'] <= 100]
-        elif pick_num <= 80:
-            # Round 2-3: Top 180
-            candidates = [p for p in available_prospects if p['rank'] <= 180]
+            candidates = [p for p in available_prospects if p['rank'] <= 110]  # Was 100
+        elif pick_num <= 60:
+            # Round 2: Top 150
+            candidates = [p for p in available_prospects if p['rank'] <= 150]
+        elif pick_num <= 100:
+            # Round 3-4: Top 220
+            candidates = [p for p in available_prospects if p['rank'] <= 220]
         elif pick_num <= 150:
-            # Round 4-5: Top 300
+            # Round 5: Top 300
             candidates = [p for p in available_prospects if p['rank'] <= 300]
         else:
             # Round 6+: Anyone
@@ -545,24 +560,29 @@ def cpu_draft_pick(available_prospects, team, pick_num):
     # Calculate scores for each prospect
     prospect_scores = []
     for prospect in candidates:
-        # Base score heavily favors prospects close to this pick number
-        rank_diff = abs(prospect['rank'] - pick_num)
+        # Base score heavily favors BEST AVAILABLE (lower rank = higher score)
+        rank = prospect['rank']
         
         if is_chaos_pick:
             # For chaos picks, rank matters less - more random
             base_score = random.randint(50, 100)
         else:
-            # Normal: Score heavily penalizes distance
-            if rank_diff <= 3:
+            # Normal: Heavily favor best available
+            # CPU wants top talent
+            if rank <= 10:
                 base_score = 100
-            elif rank_diff <= 8:
+            elif rank <= 20:
+                base_score = 90
+            elif rank <= 30:
                 base_score = 80
-            elif rank_diff <= 15:
+            elif rank <= 50:
+                base_score = 70
+            elif rank <= 80:
                 base_score = 60
-            elif rank_diff <= 25:
-                base_score = 40
+            elif rank <= 120:
+                base_score = 50
             else:
-                base_score = 20
+                base_score = 40
         
         # Apply team tendencies (small boost)
         final_score = apply_team_tendency(team, prospect, base_score, pick_num)
