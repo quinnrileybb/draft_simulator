@@ -794,40 +794,40 @@ else:
                 if st.button("Simulate Pick", type="primary", use_container_width=True):
                     # CPU makes pick
                     selected = cpu_draft_pick(st.session_state.available_prospects, current_team, st.session_state.current_pick)
-                
-                if selected:
-                    selected['drafted'] = True
-                    selected['team'] = current_team
-                    selected['pick'] = st.session_state.current_pick
                     
-                    # Use the prospect's adjusted slot bonus
-                    actual_bonus = selected.get('adjusted_slot', slot)
-                    
-                    st.session_state.draft_results.append({
-                        'pick': st.session_state.current_pick,
-                        'round': st.session_state.current_round,
-                        'team': current_team,
-                        'player': selected['name'],
-                        'rank': selected['rank'],
-                        'position': selected['position'],
-                        'school': selected['school'],
-                        'class': selected['class'],
-                        'grade': selected['grade'],
-                        'slot_value': slot,  # Pick's slot value
-                        'actual_bonus': actual_bonus  # What they sign for
-                    })
-                    
-                    st.session_state.team_spending[current_team] += actual_bonus
-                    st.session_state.available_prospects.remove(selected)
-                    
-                    # Advance pick
-                    st.session_state.current_pick += 1
-                    # Update round based on actual pick
-                    new_round = get_round_from_pick(st.session_state.current_pick)
-                    if new_round:
-                        st.session_state.current_round = new_round
-                    
-                    st.rerun()
+                    if selected:
+                        selected['drafted'] = True
+                        selected['team'] = current_team
+                        selected['pick'] = st.session_state.current_pick
+                        
+                        # Use the prospect's adjusted slot bonus
+                        actual_bonus = selected.get('adjusted_slot', slot)
+                        
+                        st.session_state.draft_results.append({
+                            'pick': st.session_state.current_pick,
+                            'round': st.session_state.current_round,
+                            'team': current_team,
+                            'player': selected['name'],
+                            'rank': selected['rank'],
+                            'position': selected['position'],
+                            'school': selected['school'],
+                            'class': selected['class'],
+                            'grade': selected['grade'],
+                            'slot_value': slot,  # Pick's slot value
+                            'actual_bonus': actual_bonus  # What they sign for
+                        })
+                        
+                        st.session_state.team_spending[current_team] += actual_bonus
+                        st.session_state.available_prospects.remove(selected)
+                        
+                        # Advance pick
+                        st.session_state.current_pick += 1
+                        # Update round based on actual pick
+                        new_round = get_round_from_pick(st.session_state.current_pick)
+                        if new_round:
+                            st.session_state.current_round = new_round
+                        
+                        st.rerun()
             
             with col2:
                 if st.button("Simulate Until My Pick", use_container_width=True):
