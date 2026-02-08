@@ -368,6 +368,8 @@ def apply_team_tendency(team, prospect, base_score, pick_num):
         multiplier += random.uniform(-tendencies['chaos'], tendencies['chaos'])
     
     return base_score * multiplier
+
+def calculate_variance_score(prospect, pick_num):
     """
     Calculate how likely a prospect is to be picked at this position
     Based on rank, position, H/C status
@@ -462,53 +464,6 @@ def apply_team_tendency(team, prospect, base_score, pick_num):
         score = 5
     
     return max(1, score)
-
-def calculate_variance_score(prospect, pick_num):
-    """Apply team-specific draft tendencies"""
-    if team not in TEAM_TENDENCIES:
-        return base_score
-    
-    tendencies = TEAM_TENDENCIES[team]
-    multiplier = 1.0
-    
-    is_hs = (prospect['class'] == 'H')
-    is_pitcher = (prospect['position'] in ['LHP', 'RHP'])
-    is_hitter = not is_pitcher
-    
-    # HS Boost
-    if 'hs_boost' in tendencies and is_hs:
-        multiplier += tendencies['hs_boost']
-    
-    # College Boost
-    if 'college_boost' in tendencies and not is_hs:
-        multiplier += tendencies['college_boost']
-    
-    # Pitcher Boost
-    if 'pitcher_boost' in tendencies and is_pitcher:
-        multiplier += tendencies['pitcher_boost']
-    
-    # Hitter Boost
-    if 'hitter_boost' in tendencies and is_hitter:
-        multiplier += tendencies['hitter_boost']
-    
-    # SS Boost
-    if 'ss_boost' in tendencies and prospect['position'] == 'SS':
-        multiplier += tendencies['ss_boost']
-    
-    # HS Pitcher Combo
-    if 'hs_pitcher_boost' in tendencies and is_hs and is_pitcher:
-        multiplier += tendencies['hs_pitcher_boost']
-    
-    # Upside Boost (high rank that fell = tools)
-    if 'upside_boost' in tendencies:
-        if prospect['rank'] <= 150 and prospect['grade'] in ['A+', 'A', 'A-']:
-            multiplier += tendencies['upside_boost']
-    
-    # Chaos Factor (Rockies)
-    if 'chaos' in tendencies:
-        multiplier += random.uniform(-0.3, 0.3)
-    
-    return base_score * multiplier
 
 def cpu_draft_pick(available_prospects, team, pick_num):
     """CPU logic with variance and team tendencies"""
