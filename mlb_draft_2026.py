@@ -372,105 +372,104 @@ def apply_team_tendency(team, prospect, base_score, pick_num):
 def calculate_variance_score(prospect, pick_num):
     """
     Calculate how likely a prospect is to be picked at this position
-    Based on rank, position, H/C status
+    Based on rank, position, H/C status - TIGHT variance model
     """
     rank = prospect['rank']
     position = prospect['position']
     is_hs = (prospect['class'] == 'H')
     
-    # Base expected pick = rank with REASONABLE adjustments
+    # Base expected pick = rank with SMALL adjustments
     expected_pick = rank
     
-    # POSITION ADJUSTMENTS (capped at 30 spots max)
+    # POSITION ADJUSTMENTS (very small for top prospects)
     if position in ['C', 'SS']:
-        if rank <= 50:
-            expected_pick -= random.randint(3, 8)
-        elif rank <= 150:
-            expected_pick -= random.randint(5, 15)
+        if rank <= 30:
+            expected_pick -= random.randint(0, 5)
+        elif rank <= 100:
+            expected_pick -= random.randint(3, 12)
         else:
-            expected_pick -= random.randint(8, 20)
+            expected_pick -= random.randint(5, 20)
     elif position == 'CF':
-        if rank <= 50:
-            expected_pick -= random.randint(2, 5)
-        elif rank <= 150:
-            expected_pick -= random.randint(3, 10)
+        if rank <= 30:
+            expected_pick -= random.randint(0, 3)
+        elif rank <= 100:
+            expected_pick -= random.randint(2, 8)
         else:
             expected_pick -= random.randint(5, 15)
     elif position == '1B':
-        if rank <= 50:
-            expected_pick += random.randint(3, 10)
+        if rank <= 30:
+            expected_pick += random.randint(2, 8)
         elif rank <= 100:
-            expected_pick += random.randint(8, 20)
-        elif rank <= 250:
-            expected_pick += random.randint(15, 35)
+            expected_pick += random.randint(5, 15)
         else:
-            expected_pick += random.randint(25, 60)
+            expected_pick += random.randint(10, 30)
     elif position in ['LHP', 'RHP']:
-        if rank > 50:
+        if rank > 100:
             expected_pick += random.randint(3, 12)
     
-    # H/C ADJUSTMENTS (more reasonable)
+    # H/C ADJUSTMENTS (MUCH tighter for top prospects)
     if is_hs:
         if rank <= 10:
-            # Elite HS stay near their rank
-            expected_pick += random.randint(0, 5)
+            # Top 10 HS stay VERY close
+            expected_pick += random.randint(0, 3)
         elif rank <= 30:
-            expected_pick += random.randint(2, 12)
-        elif rank <= 100:
-            expected_pick += random.randint(10, 30)
-            # Some fall hard (signability)
+            # Top 30 HS might fall a bit but not much
+            expected_pick += random.randint(0, 8)
+            if random.random() < 0.15:  # 15% fall harder (signability)
+                expected_pick += random.randint(15, 40)
+        elif rank <= 60:
+            expected_pick += random.randint(5, 20)
             if random.random() < 0.25:
-                expected_pick += random.randint(30, 80)
-        elif rank <= 250:
-            expected_pick += random.randint(20, 60)
-            if random.random() < 0.35:
-                expected_pick += random.randint(50, 120)
+                expected_pick += random.randint(25, 60)
+        elif rank <= 150:
+            expected_pick += random.randint(15, 40)
+            if random.random() < 0.30:
+                expected_pick += random.randint(40, 100)
         else:
-            # Deep HS prospects - big variance
+            # Deep HS - big variance
             if random.random() < 0.50:
-                expected_pick = 999  # Undrafted
+                expected_pick = 999
             else:
                 expected_pick += random.randint(50, 150)
     else:  # College
-        if rank <= 30:
-            # Top college players RISE
+        if rank <= 20:
+            # Top 20 college players SLIGHTLY rise or stay put
+            expected_pick -= random.randint(0, 5)
+        elif rank <= 60:
+            # Top 60 college slightly rise
             expected_pick -= random.randint(0, 8)
-        elif rank <= 100:
-            # College players more predictable
-            if random.random() < 0.40:  # Seniors
+        elif rank <= 150:
+            if random.random() < 0.35:  # Seniors
                 expected_pick -= random.randint(10, 25)
             else:
-                expected_pick -= random.randint(0, 12)
-        elif rank <= 250:
-            if random.random() < 0.40:  # Seniors
-                expected_pick -= random.randint(15, 35)
-            else:
-                expected_pick -= random.randint(5, 20)
+                expected_pick -= random.randint(0, 10)
         else:
             if random.random() < 0.30:
-                expected_pick -= random.randint(20, 50)
+                expected_pick -= random.randint(15, 40)
             else:
-                expected_pick -= random.randint(5, 15)
+                expected_pick -= random.randint(5, 20)
     
     # Calculate distance from expected pick
     distance = abs(pick_num - expected_pick)
     
-    # Convert to probability score (closer = higher score)
-    # Make the scoring MUCH steeper so nearby prospects are heavily favored
+    # Convert to probability score - VERY STEEP curve
+    # Prospects should almost always go within 15-20 spots of expected pick
     if distance == 0:
         score = 100
-    elif distance < 5:
-        score = 95
+    elif distance < 3:
+        score = 98
+    elif distance < 8:
+        score = 90
     elif distance < 15:
-        score = 80
-    elif distance < 30:
-        score = 50
+        score = 70
+    elif distance < 25:
+        score = 40
+    elif distance < 40:
+        score = 15
     elif distance < 60:
-        score = 25
-    elif distance < 100:
-        score = 10
+        score = 5
     else:
-        score = 2
+        score = 1
     
     return max(1, score)
 
@@ -678,6 +677,13 @@ else:
             st.info("YOUR PICK! Select a player below")
             
             # Filters
+            # Filters
+            col1, col2 = st.columns(2)
+            with col1:
+                player_search = st.text_input("Search Player Name", placeholder="e.g. Chase Meyer")
+            with col2:
+                bonus_max = st.number_input("Max Bonus ($)", min_value=0, max_value=20000000, value=20000000, step=100000)
+            
             col1, col2, col3 = st.columns(3)
             with col1:
                 position_filter = st.multiselect("Position", sorted(set(p['position'] for p in st.session_state.available_prospects)))
@@ -688,12 +694,20 @@ else:
             
             # Filter prospects
             filtered = st.session_state.available_prospects.copy()
+            
+            if player_search:
+                search_lower = player_search.lower()
+                filtered = [p for p in filtered if search_lower in p['name'].lower()]
+            
             if position_filter:
                 filtered = [p for p in filtered if p['position'] in position_filter]
             if grade_filter:
                 filtered = [p for p in filtered if p['grade'] in grade_filter]
             if hs_college:
                 filtered = [p for p in filtered if p['class'] in hs_college]
+            
+            # Bonus filter
+            filtered = [p for p in filtered if p.get('adjusted_slot', slot) <= bonus_max]
             
             # Show available prospects
             st.markdown(f"### Available Prospects ({len(filtered)} showing)")
@@ -702,7 +716,7 @@ else:
             pool = TEAM_POOLS.get(current_team, 10000000)
             remaining = pool - current_spending
             
-            for prospect in filtered[:50]:  # Show top 50
+            for prospect in filtered[:200]:  # Show top 200
                 col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 3, 2, 3, 1, 1, 2, 2])
                 
                 actual_bonus = prospect.get('adjusted_slot', slot)
