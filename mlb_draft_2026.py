@@ -699,7 +699,7 @@ else:
             st.markdown(f"### Available Prospects ({len(filtered)} showing)")
             
             current_spending = st.session_state.team_spending.get(current_team, 0)
-            pool = BONUS_POOLS.get(current_team, 10000000)
+            pool = TEAM_POOLS.get(current_team, 10000000)
             remaining = pool - current_spending
             
             for prospect in filtered[:50]:  # Show top 50
