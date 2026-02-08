@@ -607,7 +607,7 @@ with st.sidebar:
                  delta_color="normal" if remaining >= 0 else "inverse")
         
         if remaining < 0:
-            st.error("⚠️ Over pool!")
+            st.error("Over pool!")
         
         st.markdown("---")
         
@@ -618,23 +618,26 @@ with st.sidebar:
         for round_num in range(st.session_state.current_round, st.session_state.num_rounds + 1):
             user_picks = get_team_picks_in_round(st.session_state.user_team, round_num)
             if user_picks:
-                st.markdown(f"**Round {round_num}:** Picks {', '.join(map(str, user_picks))}")
+                pick_word = "Pick" if len(user_picks) == 1 else "Picks"
+                st.markdown(f"**Round {round_num}:** {pick_word} {', '.join(map(str, user_picks))}")
         
         st.markdown("---")
         
-        if st.button("🔄 Reset Draft", use_container_width=True):
+        if st.button("Reset Draft", use_container_width=True):
             st.session_state.draft_started = False
             st.rerun()
 
 # Main content
 if not st.session_state.draft_started:
-    st.info("👈 Select your team and number of rounds to begin!")
+    st.info("Select your team and number of rounds to begin!")
     
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Round 1 Order")
+        # Get first 30 picks from complete draft order
+        round_1_teams = [team for rnd, team, pick in COMPLETE_DRAFT_ORDER if pick <= 30]
         st.dataframe(
-            pd.DataFrame({"Pick": range(1, 31), "Team": DRAFT_ORDER_R1[:30]}),
+            pd.DataFrame({"Pick": range(1, len(round_1_teams) + 1), "Team": round_1_teams}),
             use_container_width=True, hide_index=True, height=400
         )
     
@@ -835,44 +838,47 @@ else:
                             next_user_pick = pick
                             break
                     
-                    # Simulate all picks until user's turn
-                    while st.session_state.current_pick < next_user_pick:
-                        current_team_sim = get_team_at_pick(st.session_state.current_pick, st.session_state.current_round)
-                        if current_team_sim != st.session_state.user_team:
-                            selected = cpu_draft_pick(st.session_state.available_prospects, current_team_sim, st.session_state.current_pick)
+                    if next_user_pick is None:
+                        st.warning("No more picks remaining for your team")
+                    else:
+                        # Simulate all picks until user's turn
+                        while st.session_state.current_pick < next_user_pick:
+                            current_team_sim = get_team_at_pick(st.session_state.current_pick, st.session_state.current_round)
+                            if current_team_sim != st.session_state.user_team:
+                                selected = cpu_draft_pick(st.session_state.available_prospects, current_team_sim, st.session_state.current_pick)
+                                
+                                if selected:
+                                    slot_sim = SLOT_VALUES.get(st.session_state.current_pick, 150000)
+                                    actual_bonus = selected.get('adjusted_slot', slot_sim)
+                                    
+                                    selected['drafted'] = True
+                                    selected['team'] = current_team_sim
+                                    selected['pick'] = st.session_state.current_pick
+                                    
+                                    st.session_state.draft_results.append({
+                                        'pick': st.session_state.current_pick,
+                                        'round': st.session_state.current_round,
+                                        'team': current_team_sim,
+                                        'player': selected['name'],
+                                        'rank': selected['rank'],
+                                        'position': selected['position'],
+                                        'school': selected['school'],
+                                        'class': selected['class'],
+                                        'grade': selected['grade'],
+                                        'slot_value': slot_sim,
+                                        'actual_bonus': actual_bonus
+                                    })
+                                    
+                                    st.session_state.team_spending[current_team_sim] += actual_bonus
+                                    st.session_state.available_prospects.remove(selected)
                             
-                            if selected:
-                                slot_sim = SLOT_VALUES.get(st.session_state.current_pick, 150000)
-                                actual_bonus = selected.get('adjusted_slot', slot_sim)
-                                
-                                selected['drafted'] = True
-                                selected['team'] = current_team_sim
-                                selected['pick'] = st.session_state.current_pick
-                                
-                                st.session_state.draft_results.append({
-                                    'pick': st.session_state.current_pick,
-                                    'round': st.session_state.current_round,
-                                    'team': current_team_sim,
-                                    'player': selected['name'],
-                                    'rank': selected['rank'],
-                                    'position': selected['position'],
-                                    'school': selected['school'],
-                                    'class': selected['class'],
-                                    'grade': selected['grade'],
-                                    'slot_value': slot_sim,
-                                    'actual_bonus': actual_bonus
-                                })
-                                
-                                st.session_state.team_spending[current_team_sim] += actual_bonus
-                                st.session_state.available_prospects.remove(selected)
+                            # Advance
+                            st.session_state.current_pick += 1
+                            new_round = get_round_from_pick(st.session_state.current_pick)
+                            if new_round:
+                                st.session_state.current_round = new_round
                         
-                        # Advance
-                        st.session_state.current_pick += 1
-                        new_round = get_round_from_pick(st.session_state.current_pick)
-                        if new_round:
-                            st.session_state.current_round = new_round
-                    
-                    st.rerun()
+                        st.rerun()
         
         # Show picks with tabs
         if st.session_state.draft_results:
