@@ -260,6 +260,10 @@ TEAM_TENDENCIES = {
         "balanced": True,
         "desc": "Balanced"
     },
+    "Athletics": {
+        "balanced": True,
+        "desc": "Best Available"
+    },
 }
 
 def apply_team_tendency(team, prospect, base_score, pick_num):
@@ -609,13 +613,12 @@ with st.sidebar:
         
         # Your upcoming picks
         st.subheader("Your Picks")
-        user_picks_this_round = get_team_picks_in_round(st.session_state.user_team, st.session_state.current_round)
-        user_picks_next_round = get_team_picks_in_round(st.session_state.user_team, st.session_state.current_round + 1) if st.session_state.current_round < st.session_state.num_rounds else []
         
-        if user_picks_this_round:
-            st.markdown(f"**Round {st.session_state.current_round}:** Picks {', '.join(map(str, user_picks_this_round))}")
-        if user_picks_next_round:
-            st.markdown(f"**Round {st.session_state.current_round + 1}:** Picks {', '.join(map(str, user_picks_next_round))}")
+        # Show picks for all remaining rounds
+        for round_num in range(st.session_state.current_round, st.session_state.num_rounds + 1):
+            user_picks = get_team_picks_in_round(st.session_state.user_team, round_num)
+            if user_picks:
+                st.markdown(f"**Round {round_num}:** Picks {', '.join(map(str, user_picks))}")
         
         st.markdown("---")
         
@@ -781,11 +784,13 @@ else:
         
         else:
             # CPU PICK
-            st.warning(f"⏳ {current_team} is picking...")
+            st.warning(f"{current_team} is picking...")
             
-            if st.button("► Simulate Pick", type="primary"):
-                # CPU makes pick
-                selected = cpu_draft_pick(st.session_state.available_prospects, current_team, st.session_state.current_pick)
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Simulate Pick", type="primary", use_container_width=True):
+                    # CPU makes pick
+                    selected = cpu_draft_pick(st.session_state.available_prospects, current_team, st.session_state.current_pick)
                 
                 if selected:
                     selected['drafted'] = True
@@ -820,13 +825,86 @@ else:
                         st.session_state.current_round = new_round
                     
                     st.rerun()
+            
+            with col2:
+                if st.button("Simulate Until My Pick", use_container_width=True):
+                    # Find next user pick
+                    next_user_pick = None
+                    for rnd, team, pick in COMPLETE_DRAFT_ORDER:
+                        if pick > st.session_state.current_pick and team == st.session_state.user_team:
+                            next_user_pick = pick
+                            break
+                    
+                    # Simulate all picks until user's turn
+                    while st.session_state.current_pick < next_user_pick:
+                        current_team_sim = get_team_at_pick(st.session_state.current_pick, st.session_state.current_round)
+                        if current_team_sim != st.session_state.user_team:
+                            selected = cpu_draft_pick(st.session_state.available_prospects, current_team_sim, st.session_state.current_pick)
+                            
+                            if selected:
+                                slot_sim = SLOT_VALUES.get(st.session_state.current_pick, 150000)
+                                actual_bonus = selected.get('adjusted_slot', slot_sim)
+                                
+                                selected['drafted'] = True
+                                selected['team'] = current_team_sim
+                                selected['pick'] = st.session_state.current_pick
+                                
+                                st.session_state.draft_results.append({
+                                    'pick': st.session_state.current_pick,
+                                    'round': st.session_state.current_round,
+                                    'team': current_team_sim,
+                                    'player': selected['name'],
+                                    'rank': selected['rank'],
+                                    'position': selected['position'],
+                                    'school': selected['school'],
+                                    'class': selected['class'],
+                                    'grade': selected['grade'],
+                                    'slot_value': slot_sim,
+                                    'actual_bonus': actual_bonus
+                                })
+                                
+                                st.session_state.team_spending[current_team_sim] += actual_bonus
+                                st.session_state.available_prospects.remove(selected)
+                        
+                        # Advance
+                        st.session_state.current_pick += 1
+                        new_round = get_round_from_pick(st.session_state.current_pick)
+                        if new_round:
+                            st.session_state.current_round = new_round
+                    
+                    st.rerun()
         
-        # Show recent picks
+        # Show picks with tabs
         if st.session_state.draft_results:
             st.markdown("---")
-            st.subheader("Recent Picks")
-            recent = pd.DataFrame(st.session_state.draft_results[-10:])
-            st.dataframe(
-                recent[['pick', 'team', 'rank', 'player', 'position', 'school']],
-                use_container_width=True, hide_index=True
-            )
+            
+            tab1, tab2, tab3 = st.tabs(["Recent Picks", "Your Picks", "All Picks"])
+            
+            with tab1:
+                st.subheader("Last 20 Picks")
+                recent = pd.DataFrame(st.session_state.draft_results[-20:])
+                st.dataframe(
+                    recent[['pick', 'team', 'rank', 'player', 'position', 'school', 'class']],
+                    use_container_width=True, hide_index=True, height=500
+                )
+            
+            with tab2:
+                st.subheader(f"{st.session_state.user_team} Picks")
+                all_picks = pd.DataFrame(st.session_state.draft_results)
+                your_picks = all_picks[all_picks['team'] == st.session_state.user_team]
+                if len(your_picks) > 0:
+                    st.dataframe(
+                        your_picks[['pick', 'round', 'rank', 'player', 'position', 'school', 'class', 'grade']],
+                        use_container_width=True, hide_index=True, height=500
+                    )
+                else:
+                    st.info("You haven't picked yet")
+            
+            with tab3:
+                st.subheader("Complete Draft Board")
+                all_picks = pd.DataFrame(st.session_state.draft_results)
+                st.dataframe(
+                    all_picks[['pick', 'round', 'team', 'rank', 'player', 'position', 'school', 'class', 'grade']],
+                    use_container_width=True, hide_index=True, height=500
+                )
+
