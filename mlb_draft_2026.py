@@ -378,90 +378,99 @@ def calculate_variance_score(prospect, pick_num):
     position = prospect['position']
     is_hs = (prospect['class'] == 'H')
     
-    # Base expected pick = rank with adjustments
+    # Base expected pick = rank with REASONABLE adjustments
     expected_pick = rank
     
-    # POSITION ADJUSTMENTS
+    # POSITION ADJUSTMENTS (capped at 30 spots max)
     if position in ['C', 'SS']:
-        if rank <= 50:
-            expected_pick -= random.randint(5, 12)
-        elif rank <= 150:
-            expected_pick -= random.randint(8, 20)
-        else:
-            expected_pick -= random.randint(10, 25)
-    elif position == 'CF':
         if rank <= 50:
             expected_pick -= random.randint(3, 8)
         elif rank <= 150:
             expected_pick -= random.randint(5, 15)
         else:
             expected_pick -= random.randint(8, 20)
+    elif position == 'CF':
+        if rank <= 50:
+            expected_pick -= random.randint(2, 5)
+        elif rank <= 150:
+            expected_pick -= random.randint(3, 10)
+        else:
+            expected_pick -= random.randint(5, 15)
     elif position == '1B':
         if rank <= 50:
-            expected_pick += random.randint(5, 15)
+            expected_pick += random.randint(3, 10)
         elif rank <= 100:
-            expected_pick += random.randint(10, 25)
+            expected_pick += random.randint(8, 20)
         elif rank <= 250:
-            expected_pick += random.randint(20, 50)
+            expected_pick += random.randint(15, 35)
         else:
-            expected_pick += random.randint(40, 80)
+            expected_pick += random.randint(25, 60)
     elif position in ['LHP', 'RHP']:
         if rank > 50:
-            expected_pick += random.randint(5, 20)
+            expected_pick += random.randint(3, 12)
     
-    # H/C ADJUSTMENTS
+    # H/C ADJUSTMENTS (more reasonable)
     if is_hs:
-        if rank <= 30:
-            expected_pick += random.randint(2, 8)
-        elif rank <= 50:
-            expected_pick += random.randint(5, 15)
-            if random.random() < 0.30:  # 30% major fall
-                expected_pick += random.randint(30, 60)
+        if rank <= 10:
+            # Elite HS stay near their rank
+            expected_pick += random.randint(0, 5)
+        elif rank <= 30:
+            expected_pick += random.randint(2, 12)
         elif rank <= 100:
-            expected_pick += random.randint(15, 40)
-            if random.random() < 0.40:  # 40% disaster
-                expected_pick += random.randint(50, 100)
+            expected_pick += random.randint(10, 30)
+            # Some fall hard (signability)
+            if random.random() < 0.25:
+                expected_pick += random.randint(30, 80)
         elif rank <= 250:
-            expected_pick += random.randint(30, 80)
-            if random.random() < 0.50:  # 50% massive fall
-                expected_pick += random.randint(80, 150)
+            expected_pick += random.randint(20, 60)
+            if random.random() < 0.35:
+                expected_pick += random.randint(50, 120)
         else:
-            # Deep HS prospects often go undrafted
-            if random.random() < 0.60:
-                expected_pick = 999  # Basically undrafted in 10 rounds
+            # Deep HS prospects - big variance
+            if random.random() < 0.50:
+                expected_pick = 999  # Undrafted
             else:
-                expected_pick += random.randint(100, 200)
+                expected_pick += random.randint(50, 150)
     else:  # College
-        if rank <= 50:
-            expected_pick -= random.randint(2, 8)
-        elif rank <= 150:
-            # College seniors rise
-            if random.random() < 0.40:  # Assume 40% seniors
+        if rank <= 30:
+            # Top college players RISE
+            expected_pick -= random.randint(0, 8)
+        elif rank <= 100:
+            # College players more predictable
+            if random.random() < 0.40:  # Seniors
+                expected_pick -= random.randint(10, 25)
+            else:
+                expected_pick -= random.randint(0, 12)
+        elif rank <= 250:
+            if random.random() < 0.40:  # Seniors
                 expected_pick -= random.randint(15, 35)
             else:
-                expected_pick -= random.randint(5, 15)
-        elif rank <= 400:
-            if random.random() < 0.40:  # Seniors
+                expected_pick -= random.randint(5, 20)
+        else:
+            if random.random() < 0.30:
                 expected_pick -= random.randint(20, 50)
             else:
-                expected_pick -= random.randint(10, 25)
+                expected_pick -= random.randint(5, 15)
     
     # Calculate distance from expected pick
     distance = abs(pick_num - expected_pick)
     
     # Convert to probability score (closer = higher score)
+    # Make the scoring MUCH steeper so nearby prospects are heavily favored
     if distance == 0:
         score = 100
-    elif distance < 10:
-        score = 90
-    elif distance < 25:
-        score = 70
-    elif distance < 50:
-        score = 40
+    elif distance < 5:
+        score = 95
+    elif distance < 15:
+        score = 80
+    elif distance < 30:
+        score = 50
+    elif distance < 60:
+        score = 25
     elif distance < 100:
-        score = 20
+        score = 10
     else:
-        score = 5
+        score = 2
     
     return max(1, score)
 
@@ -689,8 +698,16 @@ else:
             # Show available prospects
             st.markdown(f"### Available Prospects ({len(filtered)} showing)")
             
+            current_spending = st.session_state.team_spending.get(current_team, 0)
+            pool = BONUS_POOLS.get(current_team, 10000000)
+            remaining = pool - current_spending
+            
             for prospect in filtered[:50]:  # Show top 50
-                col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 3, 2, 3, 1, 1, 2])
+                col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 3, 2, 3, 1, 1, 2, 2])
+                
+                actual_bonus = prospect.get('adjusted_slot', slot)
+                would_exceed = (current_spending + actual_bonus) > pool
+                
                 with col1:
                     st.write(f"#{prospect['rank']}")
                 with col2:
@@ -705,40 +722,42 @@ else:
                 with col6:
                     st.write(prospect['grade'])
                 with col7:
-                    if st.button(f"Draft", key=f"draft_{prospect['rank']}"):
-                        # Make the pick
-                        prospect['drafted'] = True
-                        prospect['team'] = current_team
-                        prospect['pick'] = st.session_state.current_pick
-                        
-                        # Use the prospect's adjusted slot bonus (what they actually sign for)
-                        actual_bonus = prospect.get('adjusted_slot', slot)
-                        
-                        st.session_state.draft_results.append({
-                            'pick': st.session_state.current_pick,
-                            'round': st.session_state.current_round,
-                            'team': current_team,
-                            'player': prospect['name'],
-                            'rank': prospect['rank'],
-                            'position': prospect['position'],
-                            'school': prospect['school'],
-                            'class': prospect['class'],
-                            'grade': prospect['grade'],
-                            'slot_value': slot,  # Pick's slot value
-                            'actual_bonus': actual_bonus  # What they actually sign for
-                        })
-                        
-                        st.session_state.team_spending[current_team] += actual_bonus
-                        st.session_state.available_prospects.remove(prospect)
-                        
-                        # Advance pick
-                        st.session_state.current_pick += 1
-                        # Update round based on actual pick
-                        new_round = get_round_from_pick(st.session_state.current_pick)
-                        if new_round:
-                            st.session_state.current_round = new_round
-                        
-                        st.rerun()
+                    st.write(f"${actual_bonus:,.0f}")
+                with col8:
+                    if would_exceed:
+                        st.button(f"Over Pool", key=f"draft_{prospect['rank']}", disabled=True, type="secondary")
+                    else:
+                        if st.button(f"Draft", key=f"draft_{prospect['rank']}", type="primary"):
+                            # Make the pick
+                            prospect['drafted'] = True
+                            prospect['team'] = current_team
+                            prospect['pick'] = st.session_state.current_pick
+                            
+                            st.session_state.draft_results.append({
+                                'pick': st.session_state.current_pick,
+                                'round': st.session_state.current_round,
+                                'team': current_team,
+                                'player': prospect['name'],
+                                'rank': prospect['rank'],
+                                'position': prospect['position'],
+                                'school': prospect['school'],
+                                'class': prospect['class'],
+                                'grade': prospect['grade'],
+                                'slot_value': slot,  # Pick's slot value
+                                'actual_bonus': actual_bonus  # What they actually sign for
+                            })
+                            
+                            st.session_state.team_spending[current_team] += actual_bonus
+                            st.session_state.available_prospects.remove(prospect)
+                            
+                            # Advance pick
+                            st.session_state.current_pick += 1
+                            # Update round based on actual pick
+                            new_round = get_round_from_pick(st.session_state.current_pick)
+                            if new_round:
+                                st.session_state.current_round = new_round
+                            
+                            st.rerun()
         
         else:
             # CPU PICK
