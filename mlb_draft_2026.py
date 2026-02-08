@@ -478,9 +478,24 @@ def cpu_draft_pick(available_prospects, team, pick_num):
     if not available_prospects:
         return None
     
+    # CRITICAL: Filter to realistic candidates based on pick number
+    # Teams don't randomly draft rank 800 guys in round 1
+    if pick_num <= 40:  # Round 1
+        candidates = [p for p in available_prospects if p['rank'] <= 100]
+    elif pick_num <= 80:  # Round 2-3
+        candidates = [p for p in available_prospects if p['rank'] <= 200]
+    elif pick_num <= 150:  # Round 4-5
+        candidates = [p for p in available_prospects if p['rank'] <= 350]
+    else:  # Round 6+
+        candidates = available_prospects
+    
+    # Fallback if filtering is too aggressive
+    if not candidates:
+        candidates = available_prospects[:50]
+    
     # Calculate scores for each prospect
     prospect_scores = []
-    for prospect in available_prospects:
+    for prospect in candidates:
         # Base score from variance model
         variance_score = calculate_variance_score(prospect, pick_num)
         
@@ -709,14 +724,39 @@ else:
             # Bonus filter
             filtered = [p for p in filtered if p.get('adjusted_slot', slot) <= bonus_max]
             
+            # Pagination
+            prospects_per_page = 30
+            total_pages = max(1, (len(filtered) + prospects_per_page - 1) // prospects_per_page)
+            
+            if 'prospect_page' not in st.session_state:
+                st.session_state.prospect_page = 1
+            
             # Show available prospects
-            st.markdown(f"### Available Prospects ({len(filtered)} showing)")
+            st.markdown(f"### Available Prospects ({len(filtered)} total)")
+            
+            # Pagination controls
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col1:
+                if st.button("← Previous", disabled=(st.session_state.prospect_page == 1)):
+                    st.session_state.prospect_page -= 1
+                    st.rerun()
+            with col2:
+                st.write(f"Page {st.session_state.prospect_page} of {total_pages}")
+            with col3:
+                if st.button("Next →", disabled=(st.session_state.prospect_page >= total_pages)):
+                    st.session_state.prospect_page += 1
+                    st.rerun()
+            
+            # Calculate slice for current page
+            start_idx = (st.session_state.prospect_page - 1) * prospects_per_page
+            end_idx = start_idx + prospects_per_page
+            page_prospects = filtered[start_idx:end_idx]
             
             current_spending = st.session_state.team_spending.get(current_team, 0)
             pool = TEAM_POOLS.get(current_team, 10000000)
             remaining = pool - current_spending
             
-            for prospect in filtered[:200]:  # Show top 200
+            for prospect in page_prospects:
                 col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 3, 2, 3, 1, 1, 2, 2])
                 
                 actual_bonus = prospect.get('adjusted_slot', slot)
