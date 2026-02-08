@@ -474,42 +474,107 @@ def calculate_variance_score(prospect, pick_num):
     return max(1, score)
 
 def cpu_draft_pick(available_prospects, team, pick_num):
-    """CPU logic with variance and team tendencies"""
+    """CPU logic with variance and team tendencies - REALISTIC model based on actual drafts"""
     if not available_prospects:
         return None
     
-    # CRITICAL: Filter to realistic candidates based on pick number
-    # Teams don't randomly draft rank 800 guys in round 1
-    if pick_num <= 40:  # Round 1
-        candidates = [p for p in available_prospects if p['rank'] <= 100]
-    elif pick_num <= 80:  # Round 2-3
-        candidates = [p for p in available_prospects if p['rank'] <= 200]
-    elif pick_num <= 150:  # Round 4-5
-        candidates = [p for p in available_prospects if p['rank'] <= 350]
-    else:  # Round 6+
-        candidates = available_prospects
+    # CHAOS PICK: Small chance of a team reaching for someone
+    # Happens ~5-10% of the time in early rounds
+    chaos_chance = 0
+    if pick_num <= 10:
+        chaos_chance = 0.08  # 8% chance in top 10
+    elif pick_num <= 20:
+        chaos_chance = 0.12  # 12% chance in picks 11-20
+    elif pick_num <= 40:
+        chaos_chance = 0.15  # 15% chance rest of round 1
     
-    # Fallback if filtering is too aggressive
+    is_chaos_pick = random.random() < chaos_chance
+    
+    # REAL DRAFT VARIANCE MODEL
+    # Based on analysis: Top prospects stay very close to their rank
+    # But occasional chaos (like Tyler Bremner #25 → #2 in 2025)
+    
+    if is_chaos_pick:
+        # CHAOS: Reach 15-30 spots beyond normal range
+        if pick_num <= 5:
+            # Top 5 chaos: Can reach into top 25-30
+            candidates = [p for p in available_prospects if 10 < p['rank'] <= 30]
+        elif pick_num <= 10:
+            candidates = [p for p in available_prospects if 20 < p['rank'] <= 45]
+        elif pick_num <= 20:
+            candidates = [p for p in available_prospects if 40 < p['rank'] <= 75]
+        elif pick_num <= 40:
+            candidates = [p for p in available_prospects if 70 < p['rank'] <= 120]
+        else:
+            candidates = [p for p in available_prospects if p['rank'] <= 250]
+    else:
+        # NORMAL PICKS - stay close to rank
+        if pick_num <= 5:
+            # Top 5 picks: Must be from top 10 prospects
+            # In 2024: picks 1-5 were ranks 1, 4, 2, 5, 7
+            candidates = [p for p in available_prospects if p['rank'] <= 10]
+        elif pick_num <= 10:
+            # Picks 6-10: From top 20
+            candidates = [p for p in available_prospects if p['rank'] <= 20]
+        elif pick_num <= 15:
+            # Picks 11-15: From top 30
+            candidates = [p for p in available_prospects if p['rank'] <= 30]
+        elif pick_num <= 20:
+            # Picks 16-20: From top 50
+            candidates = [p for p in available_prospects if p['rank'] <= 50]
+        elif pick_num <= 30:
+            # Picks 21-30: From top 70
+            candidates = [p for p in available_prospects if p['rank'] <= 70]
+        elif pick_num <= 40:
+            # Rest of round 1: From top 100
+            candidates = [p for p in available_prospects if p['rank'] <= 100]
+        elif pick_num <= 80:
+            # Round 2-3: Top 180
+            candidates = [p for p in available_prospects if p['rank'] <= 180]
+        elif pick_num <= 150:
+            # Round 4-5: Top 300
+            candidates = [p for p in available_prospects if p['rank'] <= 300]
+        else:
+            # Round 6+: Anyone
+            candidates = available_prospects
+    
+    # Fallback
     if not candidates:
-        candidates = available_prospects[:50]
+        candidates = available_prospects[:30]
     
     # Calculate scores for each prospect
     prospect_scores = []
     for prospect in candidates:
-        # Base score from variance model
-        variance_score = calculate_variance_score(prospect, pick_num)
+        # Base score heavily favors prospects close to this pick number
+        rank_diff = abs(prospect['rank'] - pick_num)
         
-        # Apply team tendencies
-        final_score = apply_team_tendency(team, prospect, variance_score, pick_num)
+        if is_chaos_pick:
+            # For chaos picks, rank matters less - more random
+            base_score = random.randint(50, 100)
+        else:
+            # Normal: Score heavily penalizes distance
+            if rank_diff <= 3:
+                base_score = 100
+            elif rank_diff <= 8:
+                base_score = 80
+            elif rank_diff <= 15:
+                base_score = 60
+            elif rank_diff <= 25:
+                base_score = 40
+            else:
+                base_score = 20
+        
+        # Apply team tendencies (small boost)
+        final_score = apply_team_tendency(team, prospect, base_score, pick_num)
         
         prospect_scores.append((prospect, final_score))
     
-    # Weight heavily toward higher scores but allow some randomness
+    # Weight heavily toward higher scores
     prospects = [p[0] for p in prospect_scores]
-    weights = [p[1] for p in prospect_scores]
+    weights = [p[1] ** 2 for p in prospect_scores]  # Square the weights for more emphasis
     
-    # Add small random element so it's not always the same
-    weights = [w + random.uniform(0, 10) for w in weights]
+    # Add small random element
+    weights = [w + random.uniform(0, 5) for w in weights]
     
     selected = random.choices(prospects, weights=weights, k=1)[0]
     return selected
